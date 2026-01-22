@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2024"],
+    "module": "node20",
+    "target": "es2024",
+    "outDir": "./build",
+    "rootDir": "./",
+    "incremental": false,
+    "allowJs": true
+  },
+  "include": ["./src", "./cdk"]
+}
