@@ -12,9 +12,3 @@ export type DriverResponse = {
   lastname: string;
   driverLicenseId: string;
 };
-
-// seems to be not used; todo: remove this
-export type ErrorResponse = {
-  message: string;
-  errors?: unknown[];
-};
