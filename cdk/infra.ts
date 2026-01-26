@@ -10,6 +10,7 @@ import { AttributeType, Billing, TableV2 } from "aws-cdk-lib/aws-dynamodb";
 import { Rule, Schedule } from "aws-cdk-lib/aws-events";
 import { LambdaFunction as LambdaFunctionTarget } from "aws-cdk-lib/aws-events-targets";
 import { Runtime } from "aws-cdk-lib/aws-lambda";
+import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
 import { Queue, QueueEncryption } from "aws-cdk-lib/aws-sqs";
 import type { Construct } from "constructs";
@@ -17,6 +18,10 @@ import type { Construct } from "constructs";
 export class InfraStack extends Stack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
+
+    // Feature flags for controlling resources
+    const enableTipConsumer = false; // Set to false to disable SQS tip consumer
+    const enableTestDataRules = false; // Set to true to enable test data creation
 
     const driverTipsQueue = this.createQueue(
       this,
@@ -29,11 +34,29 @@ export class InfraStack extends Stack {
       "challenge-cloud-native-driver-mgmt-ts",
     );
 
+    // Tips table with composite key (PK, SK)
+    const tipsTable = new TableV2(this, "Driver-tips-table", {
+      tableName: "challenge-cloud-native-driver-tips-ts",
+      partitionKey: {
+        name: "PK",
+        type: AttributeType.STRING,
+      },
+      sortKey: {
+        name: "SK",
+        type: AttributeType.STRING,
+      },
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+      billing: Billing.onDemand(),
+      removalPolicy: RemovalPolicy.DESTROY, //for development
+    });
+
     // handler to handle POST request
     const createDriverLambda = this.createLambda(
       this,
       "create-driver-handler",
-      "handler",
+      "di",
       "handleCreateDriver",
     );
     table.grantReadWriteData(createDriverLambda);
@@ -42,10 +65,40 @@ export class InfraStack extends Stack {
     const getDriverLambda = this.createLambda(
       this,
       "get-driver-handler",
-      "handler",
+      "di",
       "handleGetDriver",
     );
-    table.grantReadWriteData(getDriverLambda);
+    table.grantReadWriteData(getDriverLambda); // todo: to grant read only access to the table
+
+    // handler to proccess GET request
+    const getDriverTipsLambda = this.createLambda(
+      this,
+      "get-driver-tips-handler",
+      "di",
+      "handleGetDriverTips",
+    );
+    table.grantReadData(getDriverTipsLambda); // // Read-only access to drivers table
+    tipsTable.grantReadData(getDriverTipsLambda); // Read-only access to tips table
+
+    // Tip consumer Lambda - processes SQS messages and updates tips table
+    const tipConsumerLambda = this.createLambda(
+      this,
+      "tip-consumer-handler",
+      "di",
+      "handleTipEvent",
+    );
+    tipsTable.grantReadWriteData(tipConsumerLambda); // Read/write access to tips table
+
+    // Configure SQS event source for tip consumer
+    // Set enableTipConsumer to false to disable message processing
+    if (enableTipConsumer) {
+      tipConsumerLambda.addEventSource(
+        new SqsEventSource(driverTipsQueue, {
+          batchSize: 10, // Process up to 10 messages per invocation
+          maxBatchingWindow: Duration.seconds(5), // Wait up to 5 seconds to batch messages
+        }),
+      );
+    }
 
     // handler responsible to generate driver and tip test data
     const createDriverTestDataLambda = this.createLambda(
@@ -68,17 +121,17 @@ export class InfraStack extends Stack {
     table.grantReadWriteData(createDriverTipTestDataLambda);
 
     // Schedule Rules use to trigger test data creation for easier integration testing
-    // change enabled to true to switch on test data creation
+    // Controlled by enableTestDataRules flag at the top of constructor
     new Rule(this, "test-data-driver-rule", {
       ruleName: "driver-test-data-scheduler-rule",
-      enabled: false,
+      enabled: enableTestDataRules,
       targets: [new LambdaFunctionTarget(createDriverTestDataLambda)],
       schedule: Schedule.rate(Duration.minutes(2)),
     });
 
     new Rule(this, "test-data-tips-rule", {
       ruleName: "tips-test-data-scheduler-rule",
-      enabled: false, // set to true when needed to generate tips
+      enabled: enableTestDataRules,
       targets: [new LambdaFunctionTarget(createDriverTipTestDataLambda)],
       schedule: Schedule.rate(Duration.minutes(1)),
     });
@@ -89,9 +142,10 @@ export class InfraStack extends Stack {
 
     drivers.addMethod("POST", new LambdaIntegration(createDriverLambda));
 
-    drivers
-      .addResource("{id}")
-      .addMethod("GET", new LambdaIntegration(getDriverLambda));
+    const driverById = drivers.addResource("{id}");
+    driverById.addMethod("GET", new LambdaIntegration(getDriverLambda));
+
+    driverById.addResource("tips").addMethod("GET", new LambdaIntegration(getDriverTipsLambda));
   }
 
   private createDynamoDbTable = (
@@ -161,5 +215,6 @@ export class InfraStack extends Stack {
     new Queue(scope, name, {
       queueName: name,
       encryption: QueueEncryption.KMS_MANAGED,
+      visibilityTimeout: Duration.seconds(180), // 6x Lambda timeout to prevent duplicate processing
     });
 }
