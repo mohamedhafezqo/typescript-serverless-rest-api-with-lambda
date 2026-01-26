@@ -18,7 +18,8 @@
     "@aws-sdk/client-dynamodb": "^3.962.0",
     "@aws-sdk/client-sqs": "^3.962.0",
     "@aws-sdk/lib-dynamodb": "^3.962.0",
-    "@aws-sdk/util-dynamodb": "^3.962.0"
+    "@aws-sdk/util-dynamodb": "^3.962.0",
+    "zod": "^4.3.6"
   },
   "scripts": {
     "build": "tsc",
