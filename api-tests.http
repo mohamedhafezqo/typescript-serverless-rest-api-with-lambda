@@ -1,0 +1,102 @@
+### Driver Management API Tests
+### 
+### Instructions:
+### 1. Replace {{baseUrl}} with your API Gateway URL from CDK deployment output
+### 2. The URL format is: https://<your-api-id>.execute-api.eu-central-1.amazonaws.com/dev
+### 3. Use VS Code REST Client extension or similar tool to execute these requests
+### 4. After creating a driver, copy the 'id' from the response to use in GET requests
+###
+###
+### IMPORTANT: Replace the URL below with your actual API Gateway URL from deployment!
+
+@baseUrl = https://3prits3j7i.execute-api.us-east-1.amazonaws.com/dev
+@driverId = 55877626-abd8-4ab0-8557-a1c0fe1b1f5e
+
+### ============================================
+### CREATE DRIVER - Example 1
+### ============================================
+POST {{baseUrl}}/drivers
+Content-Type: application/json
+
+{
+  "firstname": "John",
+  "lastname": "Doe",
+  "driverLicenseId": "DL123456"
+}
+
+### ============================================
+### CREATE DRIVER - Example 2
+### ============================================
+POST {{baseUrl}}/drivers
+Content-Type: application/json
+
+{
+  "firstname": "Jane",
+  "lastname": "Smith",
+  "driverLicenseId": "DL789012"
+}
+
+### ============================================
+### CREATE DRIVER - Example 3 (from README)
+### ============================================
+POST {{baseUrl}}/drivers
+Content-Type: application/json
+
+{
+  "firstname": "Some",
+  "lastname": "One",
+  "driverLicenseId": "4711"
+}
+
+### ============================================
+### GET DRIVER - Using variable
+### Replace {{driverId}} with actual ID from create response
+### 
+### To run: Click "Send Request" above, or use Command Palette (Cmd+Shift+P) -> "Rest Client: Send Request"
+### Alternative: Use curl in terminal: curl {{baseUrl}}/drivers/{{driverId}}
+### ============================================
+GET {{baseUrl}}/drivers/{{driverId}}
+
+### ============================================
+### GET DRIVER tips
+### Replace {{driverId}} with actual ID from create response
+### ============================================
+GET {{baseUrl}}/drivers/{{driverId}}/tips
+
+### ============================================
+### GET All drivers
+### ============================================
+GET {{baseUrl}}/drivers
+
+### ============================================
+### GET DRIVER - Example 1 (from README)
+### ============================================
+GET {{baseUrl}}/drivers/ff79773c-0bf7-46ac-aeda-441f700580d4
+
+### ============================================
+### GET DRIVER - Example 2
+### ============================================
+GET {{baseUrl}}/drivers/275d7bb8-3a2f-432c-8435-5a01c64ca6ba
+
+### ============================================
+### GET DRIVER - Invalid ID (should return 404 after fix)
+### ============================================
+GET {{baseUrl}}/drivers/invalid-driver-id-12345
+
+### ============================================
+### CREATE DRIVER - Missing body (should return 400)
+### ============================================
+POST {{baseUrl}}/drivers
+Content-Type: application/json
+
+### ============================================
+### CREATE DRIVER - Invalid JSON (should return 400)
+### ============================================
+POST {{baseUrl}}/drivers
+Content-Type: application/json
+
+{
+  "firstname": "Test",
+  "lastname": "Driver"
+  // Missing driverLicenseId
+}
