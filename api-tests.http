@@ -9,7 +9,7 @@
 ###
 ### IMPORTANT: Replace the URL below with your actual API Gateway URL from deployment!
 
-@baseUrl = https://3prits3j7i.execute-api.us-east-1.amazonaws.com/dev
+@baseUrl = https://{api-id}.execute-api.us-east-1.amazonaws.com/dev
 @driverId = 55877626-abd8-4ab0-8557-a1c0fe1b1f5e
 
 ### ============================================
