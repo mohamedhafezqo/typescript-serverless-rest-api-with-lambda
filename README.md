@@ -1,84 +1,127 @@
-# Coding Challenge
+# Driver Management Service
 
-Driver Management Service
+A serverless REST API for managing drivers and their tip aggregates. Built with TypeScript on AWS Lambda, deployed with AWS CDK. Originally built as a coding challenge.
 
-## Introduction
+## Features
 
-This repository contains a service managing drivers.
-The initial version contains REST endpoints to get and create drivers.
+- **Driver management** — Create and fetch drivers (master data in DynamoDB).
+- **Tip aggregation** — Consume tip events from SQS, store daily and weekly aggregates per driver.
+- **Tips API** — `GET /drivers/{id}/tips` returns aggregated tips for today and the current week.
+- **Testability** — Handlers use dependency injection and repository interfaces so business logic is unit-tested without AWS.
 
-The service is implemented in `Typescript` running on `AWS Lambda`.
-The [AWS CDK](https://aws.amazon.com/cdk/) is used to describe and deploy it.
-You can find the infrastructure-related code in the [cdk folder](./cdk/).
+## Tech stack
 
-The service uses a `DynamoDb` table to store the driver master data.
+| Layer        | Choice                    |
+|-------------|---------------------------|
+| Runtime     | Node.js 24 (Lambda)       |
+| Language    | TypeScript                |
+| IaC         | [AWS CDK](https://aws.amazon.com/cdk/) |
+| Database    | DynamoDB (drivers + tip aggregates)    |
+| Queue       | SQS (tip events)          |
+| API         | API Gateway (REST)        |
+| Validation  | Zod                       |
+| Tests       | Vitest                    |
 
-## Deploy and run
+## Prerequisites
 
-First make sure the dependencies are installed.
+- Node.js 20+
+- AWS CLI configured (`aws configure`)
+- AWS CDK CLI: `npm install -g aws-cdk` (optional; `npx` can run it)
+
+## Quick start
 
 ```sh
-npm run install
-```
-
-Afterwards you can deploy the service.
-
-```sh
-npm run bootstrap # only once per account
-
+npm install
+npm run bootstrap   # once per AWS account/region
 npm run deploy
 ```
 
-Now you should be able to interact with the REST API of the service.
-The API endpoints can be found in the output that `yarn deploy` produces.
+Deploy output prints the API base URL (e.g. `https://xxxxxx.execute-api.<region>.amazonaws.com/dev`). Use it in the examples below.
+
+## API
+
+Base URL: `https://<api-id>.execute-api.<region>.amazonaws.com/dev`
+
+| Method | Path                 | Description                          |
+|--------|----------------------|--------------------------------------|
+| POST   | `/drivers`           | Create a driver                      |
+| GET    | `/drivers`           | List all drivers                     |
+| GET    | `/drivers/{id}`      | Get driver by id                     |
+| GET    | `/drivers/{id}/tips` | Get driver’s tip aggregates (daily & weekly) |
+
+### Examples
 
 ```sh
-curl -X POST https://<your-api-id>.execute-api.eu-central-1.amazonaws.com/dev/drivers -d '{"firstname": "Some", "lastname": "One", "driverLicenseId": "4711"}'
+# Create a driver
+curl -X POST https://<api-id>.execute-api.eu-central-1.amazonaws.com/dev/drivers \
+  -H "Content-Type: application/json" \
+  -d '{"firstname": "Jane", "lastname": "Doe", "driverLicenseId": "DL123"}'
 
-curl  https://<your-api-id>.execute-api.eu-central-1.amazonaws.com/dev/drivers/ff79773c-0bf7-46ac-aeda-441f700580d4
+# Get a driver (use id from create response)
+curl https://<api-id>.execute-api.eu-central-1.amazonaws.com/dev/drivers/<driver-id>
+
+# Get tip aggregates for a driver
+curl https://<api-id>.execute-api.eu-central-1.amazonaws.com/dev/drivers/<driver-id>/tips
 ```
 
-## Task Specification
+Tip aggregates response shape:
 
-We want to add the functionality of **driver tipping** to our system.
-Other services have already implemented the feature of accepting tips from a customer and also paying out tips to the driver.
-
-We now want to add functionality to our system to be able to show the driver the amount of tips received.
-
-Thus our driver service **should now keep track of the tips a driver received** and offer an API to access this data.
-It should be extended to be able to **aggregate the tips** received **by each driver on a weekly and daily level**.
-
-The tipping events are available via the [SQS](https://aws.amazon.com/de/sqs/) queue `driver-tips-event-queue-ts`.
-These events contain information about the driver receiving the tip and the amount tipped.
-
-```ts
+```json
 {
-    "driverId": "275d7bb8-3a2f-432c-8435-5a01c64ca6ba",
-    "amount": "7.33"
-    "eventTime": "2019-09-16T10:58:14.651Z"
+  "daily": { "driverId": "...", "aggregationKey": "DAY#2024-01-15", "totalAmount": 42.50, "updatedAt": "..." },
+  "weekly": { "driverId": "...", "aggregationKey": "WEEK#2024-W03", "totalAmount": 125.75, "updatedAt": "..." }
 }
 ```
 
-The function [`handleSampleDriverTippingEvent`](cdk/infra.ts#L67) can be used to send a test message to the queue.
-Uncomment the scheduler event to run the function every minute.
+There is an `api-tests.http` file for use with the VS Code REST Client (or similar) once you set `baseUrl` to your deployed API.
 
-**Your task is to:**
+## Project structure
 
-- consume tipping events and store the information in a suitable way. It would be great if you could explain shortly why you decided for your strategy to store the tips (and which alternatives you discarded).
-- extend the REST API of the service by an endpoint which exposes the aggregated amount of tips received by a specific driver today and in the current week.
-- the previous developers struggled to write unit tests for the handlers. The data access is in our way. Maybe you can help us out here and make the handlers testable.
-- improve the quality of the existing code and adapt it to your needs. The existing code definitely has a few flaws. **The complete code you hand in should meet your own quality standards.**
+```
+├── cdk/              # CDK app and infra (Lambda, API Gateway, DynamoDB, SQS)
+├── src/
+│   ├── handler.ts    # API handlers (create/get driver, get tips)
+│   ├── tip-consumer-handler.ts  # SQS consumer for tip events
+│   ├── di.ts         # Composition root / dependency wiring
+│   ├── services/     # Business logic (DriverService)
+│   ├── repositories/ # Data access (DynamoDB), behind interfaces
+│   ├── dto/, schemas/, utils/
+│   └── **/*.spec.ts  # Unit tests
+├── api-tests.http    # HTTP examples for manual/exploratory testing
+└── IMPLEMENTATION.md # Design choices, storage strategy, tradeoffs
+```
 
-**Please also provide a few sentences regarding the decisions you made and the reasoning behind them.**
-It might happen that you cannot reach the solution you envision e.g. because of time constraints or lack of technology skills. This is fine - please leave a few sentences explaining the envisioned solution.
+## Scripts
 
-**NOTE on AI usage:**
-AI is part of the modern toolbox and we are open to its use @ MOIA. Feel free to use it as you see fit while solving this challenge. 
+| Command           | Description                    |
+|-------------------|--------------------------------|
+| `npm install`     | Install dependencies           |
+| `npm run build`   | Compile TypeScript to `build/` |
+| `npm test`        | Run unit tests (Vitest)        |
+| `npm run check`   | Lint with Biome                |
+| `npm run deploy`  | Deploy stack to AWS            |
+| `npm run destroy` | Delete deployed stack          |
 
-## Clean up
+## Design and decisions
 
-To remove the traces of this application on your AWS account make sure you clean up after you finished:
+Tip events are consumed from SQS and stored as **pre-aggregated** daily and weekly totals per driver in DynamoDB (no raw event table). That keeps reads O(1), costs predictable, and concurrency safe via DynamoDB `ADD`. Handlers are thin; business logic lives in services and is covered by unit tests using repository mocks.
+
+Rationale, alternatives, and tradeoffs are described in [IMPLEMENTATION.md](./IMPLEMENTATION.md).
+
+## Clean up (avoid AWS charges)
+
+To remove all resources created by this project:
 
 ```sh
 npm run destroy
 ```
+
+Confirm when prompted. This deletes the CDK stack (Lambdas, API Gateway, DynamoDB tables, SQS queue, EventBridge rules, and associated IAM). The CDK bootstrap stack in your account/region is left as-is unless you remove it separately.
+
+To double-check that the app stack is gone:
+
+```sh
+aws cloudformation list-stacks
+```
+
+The stack created by this app should no longer appear. Its name is defined in `cdk/cdk.ts` (default: `coding-challenge-infra-stack`).
